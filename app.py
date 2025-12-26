@@ -13,7 +13,7 @@ def get_video_url(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         ydl_opts = {
-            'format': '18/22/36/17',
+            'format': '230+234/230+233/18/best',
             'quiet': True,
             'no_warnings': True,
         }
@@ -34,7 +34,7 @@ def stream_video(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         ydl_opts = {
-            'format': '18/22/36/17',
+            'format': '230+234/230+233/18/best',
             'quiet': True,
             'no_warnings': True,
         }
