@@ -4,107 +4,61 @@ import requests
 
 app = Flask(__name__)
 
+YDL_OPTS = {
+    'format': 'best[height<=480]/best',
+    'quiet': True,
+    'no_warnings': True,
+}
+
 @app.route('/')
 def home():
     return jsonify({"status": "OldTube Proxy Server Running"})
 
 @app.route('/video/<video_id>')
 def get_video_url(video_id):
-    """Extract direct video URL for a YouTube video"""
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        ydl_opts = {
-            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
-            'quiet': True,
-            'no_warnings': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
-            video_url = info.get('url')
-            
             return jsonify({
                 "success": True,
-                "video_url": video_url,
+                "video_url": info.get('url'),
                 "title": info.get('title'),
                 "duration": info.get('duration')
             })
-            
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/play/<video_id>')
-def play_video(video_id):
-    """Redirect to direct video URL (for VideoView)"""
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        ydl_opts = {
-            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
-            'quiet': True,
-            'no_warnings': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            video_url = info.get('url')
-            
-            if video_url:
-                return redirect(video_url)
-            else:
-                return jsonify({"success": False, "error": "No URL found"}), 500
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/stream/<video_id>')
 def stream_video(video_id):
-    """Stream video through server (proxy for old Android)"""
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        ydl_opts = {
-            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
-            'quiet': True,
-            'no_warnings': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info.get('url')
             
             if not video_url:
                 return jsonify({"success": False, "error": "No URL found"}), 500
             
-            # Stream the video through our server
             def generate():
                 with requests.get(video_url, stream=True) as r:
                     for chunk in r.iter_content(chunk_size=8192):
                         yield chunk
             
             return Response(generate(), mimetype='video/mp4')
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/search')
 def search():
-    """Search YouTube videos"""
     query = request.args.get('q', '')
     if not query:
         return jsonify({"success": False, "error": "No query provided"}), 400
     
     try:
-        ydl_opts = {
-            'quiet': True,
-            'extract_flat': True,
-            'force_generic_extractor': False,
-        }
-        
+        ydl_opts = {'quiet': True, 'extract_flat': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             results = ydl.extract_info(f"ytsearch20:{query}", download=False)
-            
             videos = []
             for entry in results.get('entries', []):
                 if entry:
@@ -112,27 +66,19 @@ def search():
                         'id': entry.get('id'),
                         'title': entry.get('title'),
                         'channel': entry.get('channel') or entry.get('uploader'),
-                        'thumbnail': entry.get('thumbnail') or f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg",
+                        'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg",
                         'duration': entry.get('duration')
                     })
-            
             return jsonify({"success": True, "videos": videos})
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/trending')
 def trending():
-    """Get popular videos"""
     try:
-        ydl_opts = {
-            'quiet': True,
-            'extract_flat': True,
-        }
-        
+        ydl_opts = {'quiet': True, 'extract_flat': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             results = ydl.extract_info("ytsearch20:music 2024", download=False)
-            
             videos = []
             for entry in results.get('entries', [])[:20]:
                 if entry:
@@ -143,9 +89,7 @@ def trending():
                         'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg",
                         'duration': entry.get('duration')
                     })
-            
             return jsonify({"success": True, "videos": videos})
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
