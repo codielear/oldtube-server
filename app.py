@@ -1,6 +1,5 @@
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, redirect
 import yt_dlp
-import requests
 
 app = Flask(__name__)
 
@@ -15,7 +14,7 @@ def get_video_url(video_id):
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         ydl_opts = {
-            'format': 'best[height<=480]/best',
+            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
             'quiet': True,
             'no_warnings': True,
         }
@@ -34,29 +33,27 @@ def get_video_url(video_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/stream/<video_id>')
-def stream_video(video_id):
-    """Proxy stream the video"""
+@app.route('/play/<video_id>')
+def play_video(video_id):
+    """Redirect to direct video URL (for VideoView)"""
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         ydl_opts = {
-            'format': 'best[height<=360]/best',
+            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
             'quiet': True,
+            'no_warnings': True,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info.get('url')
-        
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(video_url, headers=headers, stream=True)
-        
-        return Response(
-            r.iter_content(chunk_size=1024*1024),
-            content_type=r.headers.get('content-type', 'video/mp4')
-        )
-        
+            
+            if video_url:
+                return redirect(video_url)
+            else:
+                return jsonify({"success": False, "error": "No URL found"}), 500
+            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -95,14 +92,13 @@ def search():
 
 @app.route('/trending')
 def trending():
-    """Get popular videos by searching for common terms"""
+    """Get popular videos"""
     try:
         ydl_opts = {
             'quiet': True,
             'extract_flat': True,
         }
         
-        # Search for popular/trending content instead of using trending page
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             results = ydl.extract_info("ytsearch20:music 2024", download=False)
             
