@@ -13,26 +13,13 @@ def get_video_url(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         ydl_opts = {
+            'format': '18/22/36/17',
             'quiet': True,
             'no_warnings': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            # Get the URL from the best format
-            if 'url' in info:
-                video_url = info['url']
-            elif 'formats' in info and len(info['formats']) > 0:
-                # Find a good format - prefer mp4
-                video_url = None
-                for f in info['formats']:
-                    if f.get('ext') == 'mp4' and f.get('url'):
-                        video_url = f['url']
-                        break
-                if not video_url:
-                    video_url = info['formats'][-1].get('url')
-            else:
-                video_url = None
-                
+            video_url = info.get('url')
             return jsonify({
                 "success": True,
                 "video_url": video_url,
@@ -47,53 +34,28 @@ def stream_video(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         ydl_opts = {
+            'format': '18/22/36/17',
             'quiet': True,
             'no_warnings': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            
-            # Get the URL from available formats
-            video_url = None
-            if 'url' in info:
-                video_url = info['url']
-            elif 'formats' in info and len(info['formats']) > 0:
-                for f in info['formats']:
-                    if f.get('ext') == 'mp4' and f.get('url'):
-                        video_url = f['url']
-                        break
-                if not video_url:
-                    video_url = info['formats'][-1].get('url')
+            video_url = info.get('url')
             
             if not video_url:
                 return jsonify({"success": False, "error": "No URL found"}), 500
             
+            # Get video with headers
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
             def generate():
-                with requests.get(video_url, stream=True) as r:
+                with requests.get(video_url, stream=True, headers=headers) as r:
                     for chunk in r.iter_content(chunk_size=8192):
                         yield chunk
             
             return Response(generate(), mimetype='video/mp4')
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/formats/<video_id>')
-def list_formats(video_id):
-    """Debug endpoint to see available formats"""
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        ydl_opts = {'quiet': True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = []
-            for f in info.get('formats', []):
-                formats.append({
-                    'id': f.get('format_id'),
-                    'ext': f.get('ext'),
-                    'resolution': f.get('resolution'),
-                    'has_url': bool(f.get('url'))
-                })
-            return jsonify({"success": True, "formats": formats})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
