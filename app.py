@@ -5,7 +5,7 @@ import requests
 app = Flask(__name__)
 
 YDL_OPTS = {
-    'format': 'best[height<=480]/best',
+    'format': 'best',
     'quiet': True,
     'no_warnings': True,
 }
