@@ -1,6 +1,9 @@
-from flask import Flask, jsonify, request, redirect, Response
+from flask import Flask, jsonify, request, Response
 import yt_dlp
 import requests
+import subprocess
+import tempfile
+import os
 
 app = Flask(__name__)
 
@@ -12,24 +15,19 @@ def home():
 def get_video_url(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        # Try format 18 first (360p with audio), fallback to best single format
         ydl_opts = {
-            'format': 'best[ext=mp4][height<=480]/best[ext=mp4]/best',
-            'quiet': True,
-            'no_warnings': True,
+            'format': 'worst[ext=mp4]/worst',
+            'quiet': True
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            # For merged formats, url might be in requested_formats
             video_url = info.get('url')
             if not video_url and 'requested_formats' in info:
                 video_url = info['requested_formats'][0].get('url')
             return jsonify({
                 "success": True,
                 "video_url": video_url,
-                "title": info.get('title'),
-                "duration": info.get('duration'),
-                "format": info.get('format')
+                "title": info.get('title')
             })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -38,30 +36,25 @@ def get_video_url(video_id):
 def stream_video(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        ydl_opts = {
-            'format': 'best[ext=mp4][height<=480]/best[ext=mp4]/best',
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            video_url = info.get('url')
-            if not video_url and 'requested_formats' in info:
-                video_url = info['requested_formats'][0].get('url')
-            
-            if not video_url:
-                return jsonify({"success": False, "error": "No URL found"}), 500
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            def generate():
-                with requests.get(video_url, stream=True, headers=headers) as r:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        yield chunk
-            
-            return Response(generate(), mimetype='video/mp4')
+        
+        # Use yt-dlp to download and pipe the video
+        cmd = [
+            'yt-dlp',
+            '-f', 'worst[ext=mp4]/worst',
+            '-o', '-',
+            url
+        ]
+        
+        def generate():
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            while True:
+                chunk = process.stdout.read(8192)
+                if not chunk:
+                    break
+                yield chunk
+            process.wait()
+        
+        return Response(generate(), mimetype='video/mp4')
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -69,8 +62,7 @@ def stream_video(video_id):
 def search():
     query = request.args.get('q', '')
     if not query:
-        return jsonify({"success": False, "error": "No query provided"}), 400
-    
+        return jsonify({"success": False, "error": "No query"}), 400
     try:
         ydl_opts = {'quiet': True, 'extract_flat': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -82,8 +74,7 @@ def search():
                         'id': entry.get('id'),
                         'title': entry.get('title'),
                         'channel': entry.get('channel') or entry.get('uploader'),
-                        'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg",
-                        'duration': entry.get('duration')
+                        'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg"
                     })
             return jsonify({"success": True, "videos": videos})
     except Exception as e:
@@ -102,8 +93,7 @@ def trending():
                         'id': entry.get('id'),
                         'title': entry.get('title'),
                         'channel': entry.get('channel') or entry.get('uploader'),
-                        'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg",
-                        'duration': entry.get('duration')
+                        'thumbnail': f"https://i.ytimg.com/vi/{entry.get('id')}/mqdefault.jpg"
                     })
             return jsonify({"success": True, "videos": videos})
     except Exception as e:
