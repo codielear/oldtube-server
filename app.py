@@ -1,5 +1,6 @@
-from flask import Flask, jsonify, request, redirect
+from flask import Flask, jsonify, request, redirect, Response
 import yt_dlp
+import requests
 
 app = Flask(__name__)
 
@@ -53,6 +54,36 @@ def play_video(video_id):
                 return redirect(video_url)
             else:
                 return jsonify({"success": False, "error": "No URL found"}), 500
+            
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/stream/<video_id>')
+def stream_video(video_id):
+    """Stream video through server (proxy for old Android)"""
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        ydl_opts = {
+            'format': 'best[height<=360][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
+            'quiet': True,
+            'no_warnings': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_url = info.get('url')
+            
+            if not video_url:
+                return jsonify({"success": False, "error": "No URL found"}), 500
+            
+            # Stream the video through our server
+            def generate():
+                with requests.get(video_url, stream=True) as r:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        yield chunk
+            
+            return Response(generate(), mimetype='video/mp4')
             
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
