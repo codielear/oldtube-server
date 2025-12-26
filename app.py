@@ -12,19 +12,24 @@ def home():
 def get_video_url(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
+        # Try format 18 first (360p with audio), fallback to best single format
         ydl_opts = {
-            'format': '230+234/230+233/18/best',
+            'format': 'best[ext=mp4][height<=480]/best[ext=mp4]/best',
             'quiet': True,
             'no_warnings': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+            # For merged formats, url might be in requested_formats
             video_url = info.get('url')
+            if not video_url and 'requested_formats' in info:
+                video_url = info['requested_formats'][0].get('url')
             return jsonify({
                 "success": True,
                 "video_url": video_url,
                 "title": info.get('title'),
-                "duration": info.get('duration')
+                "duration": info.get('duration'),
+                "format": info.get('format')
             })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -34,13 +39,15 @@ def stream_video(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         ydl_opts = {
-            'format': '230+234/230+233/18/best',
+            'format': 'best[ext=mp4][height<=480]/best[ext=mp4]/best',
             'quiet': True,
             'no_warnings': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info.get('url')
+            if not video_url and 'requested_formats' in info:
+                video_url = info['requested_formats'][0].get('url')
             
             if not video_url:
                 return jsonify({"success": False, "error": "No URL found"}), 500
