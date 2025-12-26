@@ -1,9 +1,6 @@
 from flask import Flask, jsonify, request, Response
 import yt_dlp
-import requests
 import subprocess
-import tempfile
-import os
 
 app = Flask(__name__)
 
@@ -15,15 +12,10 @@ def home():
 def get_video_url(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        ydl_opts = {
-            'format': 'worst[ext=mp4]/worst',
-            'quiet': True
-        }
+        ydl_opts = {'format': 'b', 'quiet': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info.get('url')
-            if not video_url and 'requested_formats' in info:
-                video_url = info['requested_formats'][0].get('url')
             return jsonify({
                 "success": True,
                 "video_url": video_url,
@@ -36,17 +28,27 @@ def get_video_url(video_id):
 def stream_video(video_id):
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
+        ydl_opts = {'format': 'b', 'quiet': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_url = info.get('url')
+            
+            if not video_url:
+                return jsonify({"success": False, "error": "No URL"}), 500
         
-        # Use yt-dlp to download and pipe the video
+        # Use ffmpeg to convert HLS to MP4 and stream
         cmd = [
-            'yt-dlp',
-            '-f', 'worst[ext=mp4]/worst',
-            '-o', '-',
-            url
+            'ffmpeg',
+            '-i', video_url,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-movflags', 'frag_keyframe+empty_moov',
+            '-f', 'mp4',
+            'pipe:1'
         ]
         
         def generate():
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             while True:
                 chunk = process.stdout.read(8192)
                 if not chunk:
