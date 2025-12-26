@@ -15,7 +15,7 @@ def get_video_url(video_id):
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         ydl_opts = {
-            'format': 'best[height<=480]/best',  # 480p max for old devices
+            'format': 'best[height<=480]/best',
             'quiet': True,
             'no_warnings': True,
         }
@@ -36,12 +36,12 @@ def get_video_url(video_id):
 
 @app.route('/stream/<video_id>')
 def stream_video(video_id):
-    """Proxy stream the video (for devices that can't access YouTube directly)"""
+    """Proxy stream the video"""
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         ydl_opts = {
-            'format': 'best[height<=360]/best',  # 360p for streaming
+            'format': 'best[height<=360]/best',
             'quiet': True,
         }
         
@@ -49,7 +49,6 @@ def stream_video(video_id):
             info = ydl.extract_info(url, download=False)
             video_url = info.get('url')
         
-        # Stream the video through our server
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(video_url, headers=headers, stream=True)
         
@@ -96,18 +95,16 @@ def search():
 
 @app.route('/trending')
 def trending():
-    """Get trending videos"""
+    """Get popular videos by searching for common terms"""
     try:
         ydl_opts = {
             'quiet': True,
             'extract_flat': True,
         }
         
+        # Search for popular/trending content instead of using trending page
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            results = ydl.extract_info(
-                "https://www.youtube.com/feed/trending", 
-                download=False
-            )
+            results = ydl.extract_info("ytsearch20:music 2024", download=False)
             
             videos = []
             for entry in results.get('entries', [])[:20]:
