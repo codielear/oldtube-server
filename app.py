@@ -45,7 +45,6 @@ def stream_video(video_id):
             if not video_url:
                 return jsonify({"success": False, "error": "No URL found"}), 500
             
-            # Get video with headers
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
